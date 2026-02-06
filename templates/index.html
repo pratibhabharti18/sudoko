@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Solver</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 55px);
+            grid-template-rows: repeat(9, 55px);
+            gap: 0;
+            border: 4px solid #667eea;
+            background: #fff;
+            margin: 20px auto;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        .cell {
+            width: 55px;
+            height: 55px;
+            border: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        .cell:focus {
+            background: #f0f4ff;
+            border-color: #667eea;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        .cell:nth-child(3n) {
+            border-right: 3px solid #667eea;
+        }
+        .cell:nth-child(n+19):nth-child(-n+27),
+        .cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 3px solid #667eea;
+        }
+        .cell.fixed {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #2d3748;
+            font-weight: 700;
+        }
+        .cell.solved {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+            color: #1a5f3f;
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        button {
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 5px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            font-family: 'Poppins', sans-serif;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✨ Sudoku Solver</h1>
+        <div id="sudoku-grid"></div>
+        <div class="controls">
+            <button onclick="solveSudoku()">🚀 Auto Solve</button>
+            <button onclick="clearGrid()">🗑️ Clear</button>
+            <button onclick="loadSample()">📋 Load Sample</button>
+        </div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('sudoku-grid');
+        const cells = [];
+
+        // Create grid
+        for (let i = 0; i < 81; i++) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'cell';
+            input.maxLength = 1;
+            input.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^1-9]/g, '');
+            });
+            grid.appendChild(input);
+            cells.push(input);
+        }
+
+        function getBoard() {
+            const board = [];
+            for (let i = 0; i < 9; i++) {
+                const row = [];
+                for (let j = 0; j < 9; j++) {
+                    const val = cells[i * 9 + j].value;
+                    row.push(val ? parseInt(val) : 0);
+                }
+                board.push(row);
+            }
+            return board;
+        }
+
+        function setBoard(board) {
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    const cell = cells[i * 9 + j];
+                    const val = board[i][j];
+                    if (val !== 0) {
+                        cell.value = val;
+                        if (!cell.classList.contains('fixed')) {
+                            cell.classList.add('solved');
+                        }
+                    }
+                }
+            }
+        }
+
+        async function solveSudoku() {
+            const board = getBoard();
+            
+            // Mark fixed cells
+            cells.forEach((cell, idx) => {
+                if (cell.value) {
+                    cell.classList.add('fixed');
+                }
+            });
+
+            const response = await fetch('/solve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ board })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setBoard(data.board);
+            } else {
+                alert('No solution exists for this puzzle!');
+            }
+        }
+
+        function clearGrid() {
+            cells.forEach(cell => {
+                cell.value = '';
+                cell.classList.remove('fixed', 'solved');
+            });
+        }
+
+        function loadSample() {
+            clearGrid();
+            const sample = [
+                [5,3,0,0,7,0,0,0,0],
+                [6,0,0,1,9,5,0,0,0],
+                [0,9,8,0,0,0,0,6,0],
+                [8,0,0,0,6,0,0,0,3],
+                [4,0,0,8,0,3,0,0,1],
+                [7,0,0,0,2,0,0,0,6],
+                [0,6,0,0,0,0,2,8,0],
+                [0,0,0,4,1,9,0,0,5],
+                [0,0,0,0,8,0,0,7,9]
+            ];
+            
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    if (sample[i][j] !== 0) {
+                        cells[i * 9 + j].value = sample[i][j];
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
